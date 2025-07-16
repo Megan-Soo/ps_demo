@@ -168,10 +168,10 @@ def extract_global_numbers(file_path):
 # === READ DATA ===
 
 # Read terminal unit coordinates
-units_dict = read_exnodedata('terminal.exnode')
+units_dict = read_exnodedata('ps_demo_data/terminal.exnode')
 
 # Read terminaldvdt.bin. A human-readable txt file is fine too, we use a binary file here as it's 2x smaller than txt.
-node_numbers, vals_by_frame = read_terminaldvdt_bin('terminaldvdt.bin')
+node_numbers, vals_by_frame = read_terminaldvdt_bin('ps_demo_data/terminaldvdt.bin')
 
 # Sort coordinates by Node numbers
 combined = list(zip(units_dict[('Node number', None)], units_dict[('coordinates', 3)])) # Zip node numbers with coordinates

@@ -95,12 +95,12 @@ def split_frames(nodes, edges, num_frames=60):
 # === READ DATA ===
 
 # Read tree
-nodes = extract_coordinates('grown.ipnode')
-edges = extract_global_numbers('grown.ipelem')
-radius = extract_radius('grown_radius.ipfiel')
+nodes = extract_coordinates('ps_demo_data/grown.ipnode')
+edges = extract_global_numbers('ps_demo_data/grown.ipelem')
+radius = extract_radius('ps_demo_data/grown_radius.ipfiel')
 
 # Read mesh
-mesh = pv.read('peeled.ply')
+mesh = pv.read('ps_demo_data/peeled.ply')
 
 # === PREP DATA ===
 

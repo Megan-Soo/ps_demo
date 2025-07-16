@@ -144,11 +144,11 @@ In this script, we will visualise the lung model overlaid on the lung image it w
 """
 
 # === READ DATA ===
-img = sitk.ReadImage('raw_3D_RAS.mha')
-units_dict = read_exnodedata('terminal.exnode')
-nodes = extract_coordinates('grown.ipnode')
-edges = extract_global_numbers('grown.ipelem')
-radius = extract_radius('grown_radius.ipfiel')
+img = sitk.ReadImage('ps_demo_data/raw_3D_RAS.mha')
+units_dict = read_exnodedata('ps_demo_data/terminal.exnode')
+nodes = extract_coordinates('ps_demo_data/grown.ipnode')
+edges = extract_global_numbers('ps_demo_data/grown.ipelem')
+radius = extract_radius('ps_demo_data/grown_radius.ipfiel')
 
 # === PREP DATA ===
 # Prepare image info
