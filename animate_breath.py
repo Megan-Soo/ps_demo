@@ -184,8 +184,8 @@ combined_sorted = sorted(combined, key=lambda x: x[0]) # Sort both by node numbe
 sorted_nodes, sorted_coords = zip(*combined_sorted) # Unzip the sorted pairs back into separate lists
 
 # Read tree (ipnode or exelem, as long the connections are read in correctly)
-nodes = extract_coordinates('grown.ipnode')
-edges = extract_global_numbers('grown.ipelem')
+nodes = extract_coordinates('ps_demo_data/grown.ipnode')
+edges = extract_global_numbers('ps_demo_data/grown.ipelem')
 edges = edges - 1 # IMPORTANT: python is zero-indexing. Shift corresponding Node numbers accordingly.
 
 # === POLYSCOPING BEGINS ===
