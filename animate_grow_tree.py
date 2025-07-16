@@ -92,6 +92,11 @@ def split_frames(nodes, edges, num_frames=60):
 
     return frames
 
+"""
+This script breaks down the tree structure from a .ipnode file into frames, each containing a subset of nodes and edges.
+It reads the nodes, edges, and radius from specified files, processes them, and prepares them for frame animation in Polyscope.
+"""
+
 # === READ DATA ===
 
 # Read tree

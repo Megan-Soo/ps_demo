@@ -165,6 +165,11 @@ def extract_global_numbers(file_path):
     
     return np.array(global_numbers)
 
+"""
+This script reads the coordinates and volumes of terminal nodes, then splits the volume changes into frames for animation in Polyscope.
+A tree visualisation is also registered, showing the airway structure.
+"""
+
 # === READ DATA ===
 
 # Read terminal unit coordinates
