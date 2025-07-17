@@ -1,4 +1,5 @@
 ps_demo_data
 *.ini
 *.zip
+*.png
 ps-venv

@@ -174,12 +174,12 @@ img_block = ps.register_volume_grid("image block", (shape[2],shape[1],shape[0]),
 img_block.add_scalar_quantity("intensity",swap_arr,defined_on='nodes',enabled=True)
 
 # Register acinus tissue units
-terminal = ps.register_point_cloud("terminal",coordinates,radius=0.002)
+terminal = ps.register_point_cloud("terminal",coordinates,radius=0.002,enabled=False)
 terminal.add_scalar_quantity("flow",flow,cmap='jet',enabled=True)
 
 # Register tree
 tree = ps.register_curve_network("tree",nodes,edges,radius=0.0007,color=[155/255,155/255,155/255])
-tree.add_scalar_quantity("radius",radius,defined_on='edges')
+tree.add_scalar_quantity("radius",radius,defined_on='edges',enabled=True)
 
 # Set up planes
 cor_plane_pos = ps.add_scene_slice_plane()
