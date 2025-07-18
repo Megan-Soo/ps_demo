@@ -43,19 +43,6 @@ def extract_global_numbers(file_path):
     
     return np.array(global_numbers)
 
-def extract_radius(file_path):
-    radius_values = []
-    pattern = re.compile(r'The field variable value is \[ .*?\]: ([\d\.D\+\-]+)')
-    
-    with open(file_path, 'r') as file:
-        for line in file:
-            match = pattern.search(line)
-            if match:
-                value = match.group(1).replace('D', 'E')  # Convert Fortran-style exponent
-                radius_values.append(float(value))
-    
-    return np.array(radius_values)
-
 def split_frames(nodes, edges, num_frames=60):
     """
     Given an array of nodes and some connections (edges), split the connections into equal sections (by number of frames).
@@ -102,7 +89,6 @@ It reads the nodes, edges, and radius from specified files, processes them, and 
 # Read tree
 nodes = extract_coordinates('ps_demo_data/grown.ipnode')
 edges = extract_global_numbers('ps_demo_data/grown.ipelem')
-radius = extract_radius('ps_demo_data/grown_radius.ipfiel')
 
 # Read mesh
 mesh = pv.read('ps_demo_data/peeled.ply')
