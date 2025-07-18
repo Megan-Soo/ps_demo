@@ -1,6 +1,7 @@
 import numpy as np
 import polyscope as ps
-import re
+import polyscope.imgui as psim
+import re, time
 from collections import defaultdict
 
 def extract_coordinates(file_path):
@@ -236,23 +237,54 @@ edges = edges - 1  # Adjust for zero-indexing
 radius = extract_radius('ps_demo_data/grown_radius.ipfiel')
 radii = np.column_stack([radius, radius]) # since we only have one radius per edge, we duplicate it for both ends
 
-# Generate mesh
-verts, faces = generate_network_tube_mesh(nodes, edges, radii, segments=24)
-
 # For smooth tree mesh: Compute joint radii & per-edge radii
-joint_radii, edge_radii = compute_joint_radii(nodes, edges, radius)
+_, edge_radii = compute_joint_radii(nodes, edges, radius)
 # Generate mesh with joint radii
-verts_joint, faces_joint = generate_network_tube_mesh(nodes, edges, edge_radii, segments=24)
+n_segments = 24
+verts_joint, faces_joint = generate_network_tube_mesh(nodes, edges, edge_radii, segments=n_segments)
+faces_per_edge = n_segments * 2  # each edge contributes 2 faces per segment
 
-# Gives us an option to read in mesh later so we don't have to generate mesh from scratch every time
-export_mesh_to_ply(verts, faces, "ps_demo_data/grown.ply", ascii=False)
+# Can certainly read in .ply file instead, but need to know:
+# number of edges in the tree and number of face segments generated per edge
 
 # Initialize polyscope
 ps.init()
 
 # Register your surface mesh
-ps.register_surface_mesh("CMGUI-style", verts, faces, smooth_shade=True,enabled=False)
 ps.register_surface_mesh("Smooth", verts_joint, faces_joint, smooth_shade=True,enabled=True)
+
+# == CALLBACK FUNCTION FOR ANIMATION ==
+
+n_frames = 15 # number of frames
+max_edges_per_frame = np.linspace(1, len(edges), n_frames, dtype=int) # get the max edge index for each frame
+curr_frame = 0 # parameter to manipulate thru UI
+auto_playing = False
+
+def callback():
+    global curr_frame, auto_playing
+
+    update_frame_data = False
+    _, auto_playing = psim.Checkbox("Autoplay", auto_playing)
+
+    # Advance the frame
+    if auto_playing:
+        update_frame_data = True
+        curr_frame = (curr_frame + 1) % n_frames
+
+    # Slider to manually scrub through frames  
+    slider_updated, curr_frame = psim.SliderInt("Curr Frame", curr_frame, 0, n_frames-1)
+    update_frame_data = update_frame_data or slider_updated
+
+    # Update the scene content if-needed
+    if update_frame_data:
+        # Get edge index e
+        e = max_edges_per_frame[curr_frame]
+        # Get faces for the current frame
+        end_face = (e+1) * faces_per_edge
+        faces_f = faces_joint[:end_face]
+        ps.register_surface_mesh("Smooth", verts_joint, faces_f, smooth_shade=True,enabled=True) # can use full verts_joint arr since it is static
+
+ps.set_user_callback(callback)
 
 # Misc settings
 ps.set_ground_plane_mode("none")
