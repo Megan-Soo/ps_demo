@@ -305,7 +305,7 @@ verts, faces, data = generate_network_tube_mesh(nodes, edges, radii, data=flow, 
 # For smooth tree mesh: Compute joint radii & per-edge radii
 joint_radii, edge_radii = compute_joint_radii(nodes, edges, radius)
 # Generate mesh with joint radii
-n_segments = 24
+n_segments = 10
 verts_joint, faces_joint, data_joint = generate_network_tube_mesh(nodes, edges, edge_radii, data=flow, segments=n_segments)
 
 # Gives us an option to read in mesh later so we don't have to generate mesh from scratch every time

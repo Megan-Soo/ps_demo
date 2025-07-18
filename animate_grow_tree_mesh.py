@@ -290,7 +290,7 @@ radii = np.column_stack([radius, radius]) # since we only have one radius per ed
 # For smooth tree mesh: Compute joint radii & per-edge radii
 _, edge_radii = compute_joint_radii(nodes, edges, radius)
 # Generate mesh with joint radii
-n_segments = 24
+n_segments = 10
 verts_joint, faces_joint = generate_network_tube_mesh(nodes, edges, edge_radii, segments=n_segments)
 faces_per_edge = n_segments * 2  # each edge contributes 2 faces per segment
 
@@ -309,7 +309,7 @@ ps.register_surface_mesh("Smooth", verts_joint, faces_joint, smooth_shade=True,e
 
 # == CALLBACK FUNCTION FOR ANIMATION ==
 
-n_frames = 15 # number of frames
+n_frames = 30 # number of frames
 max_edges_per_frame = np.linspace(1, len(edges), n_frames, dtype=int) # get the max edge index for each frame
 curr_frame = 0 # parameter to manipulate thru UI
 auto_playing = False
@@ -324,6 +324,7 @@ def callback():
     if auto_playing:
         update_frame_data = True
         curr_frame = (curr_frame + 1) % n_frames
+        time.sleep(0.05)  # slow down the animation a bit
 
     # Slider to manually scrub through frames  
     slider_updated, curr_frame = psim.SliderInt("Curr Frame", curr_frame, 0, n_frames-1)
