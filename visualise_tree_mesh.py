@@ -100,60 +100,6 @@ def compute_joint_radii(nodes, edges, edge_mid_radii):
 
     return joint_radii, edge_radii
 
-def generate_variable_radius_cylinder_mesh(p0, p1, r0, r1, segments=16):
-    p0 = np.array(p0, dtype=float)
-    p1 = np.array(p1, dtype=float)
-    axis = p1 - p0
-    length = np.linalg.norm(axis)
-    if length < 1e-8:
-        raise ValueError("p0 and p1 are too close together")
-
-    # Normalize axis
-    axis = axis / length
-
-    # Find a vector not parallel to axis to build an orthonormal frame
-    if abs(axis[0]) < 0.9:
-        tmp = np.array([1, 0, 0], dtype=float)
-    else:
-        tmp = np.array([0, 1, 0], dtype=float)
-    v = np.cross(axis, tmp)
-    v /= np.linalg.norm(v)
-    u = np.cross(axis, v)
-
-    # Generate angular positions
-    theta = np.linspace(0, 2*np.pi, segments, endpoint=False)
-
-    vertices = []
-    normals = []
-
-    # bottom ring
-    for t in theta:
-        dir_vec = np.cos(t)*u + np.sin(t)*v
-        vertices.append(p0 + r0 * dir_vec)
-        normals.append(dir_vec)
-
-    # top ring
-    for t in theta:
-        dir_vec = np.cos(t)*u + np.sin(t)*v
-        vertices.append(p1 + r1 * dir_vec)
-        normals.append(dir_vec)
-
-    vertices = np.array(vertices)
-    normals = np.array(normals)
-
-    # Build faces (triangles)
-    faces = []
-    for i in range(segments):
-        j = (i + 1) % segments
-        # bottom i -> bottom j -> top j
-        faces.append([i, j, segments + j])
-        # bottom i -> top j -> top i
-        faces.append([i, segments + j, segments + i])
-
-    faces = np.array(faces, dtype=int)
-
-    return vertices, normals, faces
-
 def generate_network_tube_mesh(nodes, edges, radii, segments=16):
     """
     Build a triangle mesh by sweeping a cylinder along each edge.
