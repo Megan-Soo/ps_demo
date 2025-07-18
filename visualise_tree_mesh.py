@@ -100,10 +100,10 @@ def compute_joint_radii(nodes, edges, edge_mid_radii):
 
     return joint_radii, edge_radii
 
-def generate_network_tube_mesh(nodes, edges, radii, segments=16):
+def generate_network_tube_mesh(nodes, edges, radii, data=None, segments=16):
     """
     Build a triangle mesh by sweeping a cylinder along each edge.
-    
+
     Parameters
     ----------
     nodes : (N,3) float array
@@ -112,31 +112,37 @@ def generate_network_tube_mesh(nodes, edges, radii, segments=16):
         indices into `nodes` for each edge
     radii : (E,2) float array
         radius at start and end of each edge
+    data : (E,) float array or None
+        optional per-edge data to be propagated to mesh vertices
     segments : int
         number of subdivisions around the circle
-    
+
     Returns
     -------
     vertices : (M,3) float array
     faces : (K,3) int array
+    data_per_vertex : (M,) float array or None
+        repeated data values for each vertex (or None if no data provided)
     """
     all_vertices = []
     all_faces = []
+    all_data = []
     vert_offset = 0
+
+    # flag to know if we assign data
+    assign_data = data is not None and len(data) > 0
 
     for e, (i0, i1) in enumerate(edges):
         p0 = nodes[i0]
         p1 = nodes[i1]
         r0, r1 = radii[e]
 
-        # --- build tapered cylinder for this edge ---
         axis = p1 - p0
         length = np.linalg.norm(axis)
         if length < 1e-12:
             continue
         axis = axis / length
 
-        # build frame
         if abs(axis[0]) < 0.9:
             tmp = np.array([1, 0, 0], dtype=float)
         else:
@@ -172,15 +178,19 @@ def generate_network_tube_mesh(nodes, edges, radii, segments=16):
         all_vertices.append(verts)
         all_faces.append(faces)
 
+        if assign_data:
+            all_data.append(np.full(verts.shape[0], data[e]))
+
     if len(all_vertices) == 0:
-        return np.zeros((0,3)), np.zeros((0,3), dtype=int)
+        return np.zeros((0,3)), np.zeros((0,3), dtype=int), None
 
     vertices = np.vstack(all_vertices)
     faces = np.vstack(all_faces)
+    data_per_vertex = np.concatenate(all_data) if assign_data else None
 
-    return vertices, faces
+    return vertices, faces, data_per_vertex
 
-def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
+def export_mesh_to_ply(vertices, faces, filepath, ascii=True, n_segments=None, n_edges=None):
     """
     Export a triangle mesh to a PLY file.
 
@@ -190,6 +200,8 @@ def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
     faces    : (M,3) int array (0-based indices)
     filepath : str
     ascii    : bool, if True write ASCII, else binary little-endian
+    n_segments : int or None, optional number of segments per edge to include as comment
+    n_edges : int or None, optional number of edges in tree to include as comment
     """
     N = vertices.shape[0]
     M = faces.shape[0]
@@ -201,6 +213,11 @@ def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
         header = []
         header.append('ply')
         header.append(f'format {mode} 1.0')
+        # Add comments if given
+        if n_segments is not None:
+            header.append(f'comment n segments per edge {n_segments}')
+        if n_edges is not None:
+            header.append(f'comment n edges in tree {n_edges}')
         header.append(f'element vertex {N}')
         header.append('property float x')
         header.append('property float y')
@@ -229,6 +246,49 @@ def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
                 # write uchar count then int32 indices
                 f.write(struct.pack('<Biii', 3, face[0], face[1], face[2]))
 
+def read_ply_header_comments(filepath):
+    """
+    Reads the header of a PLY file (ASCII or binary) and extracts
+    'n segments per edge' and 'n edges in tree' values from comments.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the PLY file.
+
+    Returns
+    -------
+    dict with keys 'n_segments' and 'n_edges', values are int or None if not found.
+    """
+    n_segments = None
+    n_edges = None
+
+    with open(filepath, 'rb') as f:
+        while True:
+            line_bytes = f.readline()
+            if not line_bytes:
+                # EOF before end_header
+                break
+            line = line_bytes.decode('utf-8').strip()
+            if line.startswith('comment'):
+                comment_text = line[len('comment '):]
+                # parse known comments
+                if comment_text.startswith('n segments per edge'):
+                    # extract integer after the phrase
+                    try:
+                        n_segments = int(comment_text.split()[-1])
+                    except Exception:
+                        pass
+                elif comment_text.startswith('n edges in tree'):
+                    try:
+                        n_edges = int(comment_text.split()[-1])
+                    except Exception:
+                        pass
+            elif line == 'end_header':
+                break
+
+    return {'n_segments': n_segments, 'n_edges': n_edges}
+
 # Read grown tree data
 nodes = extract_coordinates('ps_demo_data/grown.ipnode')
 edges = extract_global_numbers('ps_demo_data/grown.ipelem')
@@ -236,23 +296,33 @@ edges = edges - 1  # Adjust for zero-indexing
 radius = extract_radius('ps_demo_data/grown_radius.ipfiel')
 radii = np.column_stack([radius, radius]) # since we only have one radius per edge, we duplicate it for both ends
 
+# Generate synthetic flow values per edge to map to mesh vertices
+flow = np.random.rand(len(edges)) * 5  # Random flow values between 0 and 5 mm3/s
+
 # Generate mesh
-verts, faces = generate_network_tube_mesh(nodes, edges, radii, segments=24)
+verts, faces, data = generate_network_tube_mesh(nodes, edges, radii, data=flow, segments=24) # if no data input, data returned is None
 
 # For smooth tree mesh: Compute joint radii & per-edge radii
 joint_radii, edge_radii = compute_joint_radii(nodes, edges, radius)
 # Generate mesh with joint radii
-verts_joint, faces_joint = generate_network_tube_mesh(nodes, edges, edge_radii, segments=24)
+n_segments = 24
+verts_joint, faces_joint, data_joint = generate_network_tube_mesh(nodes, edges, edge_radii, data=flow, segments=n_segments)
 
 # Gives us an option to read in mesh later so we don't have to generate mesh from scratch every time
-export_mesh_to_ply(verts, faces, "ps_demo_data/grown.ply", ascii=False)
+export_mesh_to_ply(verts_joint, faces_joint, "ps_demo_data/grown.ply", ascii=True, n_edges=len(edges), n_segments=n_segments)
+meta = read_ply_header_comments("ps_demo_data/grown.ply")
+print(meta) # check that n edges and n segments are read correctly
 
 # Initialize polyscope
 ps.init()
 
 # Register your surface mesh
-ps.register_surface_mesh("CMGUI-style", verts, faces, smooth_shade=True,enabled=False)
-ps.register_surface_mesh("Smooth", verts_joint, faces_joint, smooth_shade=True,enabled=True)
+normal = ps.register_surface_mesh("CMGUI-style", verts, faces, smooth_shade=True,enabled=True)
+normal.add_scalar_quantity("synthetic flow", data, defined_on='vertices', enabled=True)
+smooth = ps.register_surface_mesh("Smooth", verts_joint, faces_joint, smooth_shade=True,enabled=True)
+smooth.add_scalar_quantity("synthetic flow", data_joint, defined_on='vertices', enabled=True)
+smooth.translate((200,0,0))
+# NB: also tested data defined on 'faces', looks the same as if defined on 'vertices' in this case.
 
 # Misc settings
 ps.set_ground_plane_mode("none")
@@ -260,4 +330,5 @@ ps.set_navigation_style("free")
 ps.set_up_dir("z_up")
 ps.set_front_dir("neg_y_front")
 ps.set_background_color([0,0,0])
+ps.set_view_projection_mode('orthographic')
 ps.show()

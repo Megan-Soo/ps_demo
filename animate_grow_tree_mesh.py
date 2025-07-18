@@ -181,7 +181,7 @@ def generate_network_tube_mesh(nodes, edges, radii, segments=16):
 
     return vertices, faces
 
-def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
+def export_mesh_to_ply(vertices, faces, filepath, ascii=True, n_segments=None, n_edges=None):
     """
     Export a triangle mesh to a PLY file.
 
@@ -191,6 +191,8 @@ def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
     faces    : (M,3) int array (0-based indices)
     filepath : str
     ascii    : bool, if True write ASCII, else binary little-endian
+    n_segments : int or None, optional number of segments per edge to include as comment
+    n_edges : int or None, optional number of edges in tree to include as comment
     """
     N = vertices.shape[0]
     M = faces.shape[0]
@@ -202,6 +204,11 @@ def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
         header = []
         header.append('ply')
         header.append(f'format {mode} 1.0')
+        # Add comments if given
+        if n_segments is not None:
+            header.append(f'comment n segments per edge {n_segments}')
+        if n_edges is not None:
+            header.append(f'comment n edges in tree {n_edges}')
         header.append(f'element vertex {N}')
         header.append('property float x')
         header.append('property float y')
@@ -230,6 +237,49 @@ def export_mesh_to_ply(vertices, faces, filepath, ascii=True):
                 # write uchar count then int32 indices
                 f.write(struct.pack('<Biii', 3, face[0], face[1], face[2]))
 
+def read_ply_header_comments(filepath):
+    """
+    Reads the header of a PLY file (ASCII or binary) and extracts
+    'n segments per edge' and 'n edges in tree' values from comments.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the PLY file.
+
+    Returns
+    -------
+    dict with keys 'n_segments' and 'n_edges', values are int or None if not found.
+    """
+    n_segments = None
+    n_edges = None
+
+    with open(filepath, 'rb') as f:
+        while True:
+            line_bytes = f.readline()
+            if not line_bytes:
+                # EOF before end_header
+                break
+            line = line_bytes.decode('utf-8').strip()
+            if line.startswith('comment'):
+                comment_text = line[len('comment '):]
+                # parse known comments
+                if comment_text.startswith('n segments per edge'):
+                    # extract integer after the phrase
+                    try:
+                        n_segments = int(comment_text.split()[-1])
+                    except Exception:
+                        pass
+                elif comment_text.startswith('n edges in tree'):
+                    try:
+                        n_edges = int(comment_text.split()[-1])
+                    except Exception:
+                        pass
+            elif line == 'end_header':
+                break
+
+    return {'n_segments': n_segments, 'n_edges': n_edges}
+
 # Read grown tree data
 nodes = extract_coordinates('ps_demo_data/grown.ipnode')
 edges = extract_global_numbers('ps_demo_data/grown.ipelem')
@@ -245,7 +295,11 @@ verts_joint, faces_joint = generate_network_tube_mesh(nodes, edges, edge_radii, 
 faces_per_edge = n_segments * 2  # each edge contributes 2 faces per segment
 
 # Can certainly read in .ply file instead, but need to know:
-# number of edges in the tree and number of face segments generated per edge
+# number of edges in the tree & number of face segments generated per edge. See below.
+# Gives us an option to read in mesh later so we don't have to generate mesh from scratch every time
+export_mesh_to_ply(verts_joint, faces_joint, "ps_demo_data/grown.ply", ascii=False, n_edges=len(edges), n_segments=n_segments)
+meta = read_ply_header_comments("ps_demo_data/grown.ply")
+print(meta) # check that n edges and n segments are read correctly
 
 # Initialize polyscope
 ps.init()
