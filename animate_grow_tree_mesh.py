@@ -285,7 +285,6 @@ nodes = extract_coordinates('ps_demo_data/grown.ipnode')
 edges = extract_global_numbers('ps_demo_data/grown.ipelem')
 edges = edges - 1  # Adjust for zero-indexing
 radius = extract_radius('ps_demo_data/grown_radius.ipfiel')
-radii = np.column_stack([radius, radius]) # since we only have one radius per edge, we duplicate it for both ends
 
 # For smooth tree mesh: Compute joint radii & per-edge radii
 _, edge_radii = compute_joint_radii(nodes, edges, radius)
