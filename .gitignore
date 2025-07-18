@@ -4,3 +4,4 @@ ps_demo_data
 *.png
 *.ply
 ps-venv
+**/__pycache__/
