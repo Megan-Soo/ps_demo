@@ -5,3 +5,4 @@ ps_demo_data
 *.ply
 ps-venv
 **/__pycache__/
+*.pyc
