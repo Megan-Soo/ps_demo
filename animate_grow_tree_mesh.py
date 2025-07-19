@@ -181,30 +181,34 @@ def generate_network_tube_mesh(nodes, edges, radii, segments=16):
 
     return vertices, faces
 
-def export_mesh_to_ply(vertices, faces, filepath, ascii=True, n_segments=None, n_edges=None):
+def export_mesh_to_ply(vertices, faces, filepath, ascii=True,
+                       n_segments=None, n_edges=None,
+                       vertex_data=None):
     """
-    Export a triangle mesh to a PLY file.
+    Export a triangle mesh with optional per-vertex data to a PLY file.
 
     Parameters
     ----------
     vertices : (N,3) float array
     faces    : (M,3) int array (0-based indices)
     filepath : str
-    ascii    : bool, if True write ASCII, else binary little-endian
-    n_segments : int or None, optional number of segments per edge to include as comment
-    n_edges : int or None, optional number of edges in tree to include as comment
+    ascii    : bool, write ASCII if True, else binary little-endian
+    n_segments : int or None, optional for comment
+    n_edges : int or None, optional for comment
+    vertex_data : (N,) float array or None, extra per-vertex data to store as 'value'
     """
     N = vertices.shape[0]
     M = faces.shape[0]
+    if vertex_data is not None and len(vertex_data) != N:
+        raise ValueError("vertex_data must have same length as vertices")
 
     mode = 'ascii' if ascii else 'binary_little_endian'
 
     with open(filepath, 'wb' if not ascii else 'w') as f:
-        # ---- PLY header ----
+        # ---- Header ----
         header = []
         header.append('ply')
         header.append(f'format {mode} 1.0')
-        # Add comments if given
         if n_segments is not None:
             header.append(f'comment n segments per edge {n_segments}')
         if n_edges is not None:
@@ -213,28 +217,36 @@ def export_mesh_to_ply(vertices, faces, filepath, ascii=True, n_segments=None, n
         header.append('property float x')
         header.append('property float y')
         header.append('property float z')
+        if vertex_data is not None:
+            header.append('property float value')  # custom property
         header.append(f'element face {M}')
         header.append('property list uchar int vertex_indices')
-        header.append('end_header\n')
-        header_str = "\n".join(header)
+        header.append('end_header')
+        header_str = "\n".join(header) + "\n"
         if ascii:
-            f.write(header_str + "\n")
+            f.write(header_str)
         else:
             f.write(header_str.encode('utf-8'))
 
-        # ---- vertices ----
+        # ---- Vertex data ----
         if ascii:
-            for v in vertices:
-                f.write(f"{v[0]} {v[1]} {v[2]}\n")
-            # ---- faces ----
+            for i, v in enumerate(vertices):
+                if vertex_data is not None:
+                    f.write(f"{v[0]} {v[1]} {v[2]} {vertex_data[i]}\n")
+                else:
+                    f.write(f"{v[0]} {v[1]} {v[2]}\n")
+            # ---- Face data ----
             for face in faces:
                 f.write(f"3 {face[0]} {face[1]} {face[2]}\n")
         else:
             import struct
-            for v in vertices:
-                f.write(struct.pack('<fff', *v))
+            for i, v in enumerate(vertices):
+                if vertex_data is not None:
+                    f.write(struct.pack('<fff', *v))
+                    f.write(struct.pack('<f', float(vertex_data[i])))
+                else:
+                    f.write(struct.pack('<fff', *v))
             for face in faces:
-                # write uchar count then int32 indices
                 f.write(struct.pack('<Biii', 3, face[0], face[1], face[2]))
 
 def read_ply_header_comments(filepath):
@@ -280,6 +292,14 @@ def read_ply_header_comments(filepath):
 
     return {'n_segments': n_segments, 'n_edges': n_edges}
 
+"""
+This script generates a mesh from a 1D tree structure defined by nodes and edges,
+and assigns synthetic flow values to the mesh vertices.
+The mesh is exported to a PLY file, which includes metadata about the number of edges and segments.
+The number of edges and segments is needed to visualize the mesh correctly in an animation.
+The mesh is visualized using Polyscope.
+"""
+
 # Read grown tree data
 nodes = extract_coordinates('ps_demo_data/grown.ipnode')
 edges = extract_global_numbers('ps_demo_data/grown.ipelem')
@@ -296,7 +316,7 @@ faces_per_edge = n_segments * 2  # each edge contributes 2 faces per segment
 # Can certainly read in .ply file instead, but need to know:
 # number of edges in the tree & number of face segments generated per edge. See below.
 # Gives us an option to read in mesh later so we don't have to generate mesh from scratch every time
-export_mesh_to_ply(verts_joint, faces_joint, "ps_demo_data/grown.ply", ascii=False, n_edges=len(edges), n_segments=n_segments)
+export_mesh_to_ply(verts_joint, faces_joint, "ps_demo_data/grown.ply", ascii=False, n_edges=len(edges), n_segments=n_segments,vertex_data=None)
 meta = read_ply_header_comments("ps_demo_data/grown.ply")
 print(meta) # check that n edges and n segments are read correctly
 
