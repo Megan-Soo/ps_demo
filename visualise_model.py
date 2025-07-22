@@ -210,7 +210,7 @@ flow = np.array(units_dict[('flow',1)])
 # Prepare tree info
 edges = edges - 1 # IMPORTANT: python is zero-indexing, so adjust connections accordingly
 
-joint_radii, _ = compute_joint_radii(nodes, edges, radius)
+# joint_radii, _ = compute_joint_radii(nodes, edges, radius)
 
 # === POLYSCOPING BEGINS ===
 ps.init()
@@ -227,8 +227,8 @@ terminal.add_scalar_quantity("flow",flow,cmap='jet',enabled=True)
 
 # Register tree
 tree = ps.register_curve_network("tree",nodes,edges,color=[155/255,155/255,155/255])
-tree.add_scalar_quantity("radius node",joint_radii,defined_on='nodes',enabled=True) # this is sufficient to visualise varied edge radii
-tree.set_node_radius_quantity("radius node") # this is sufficient to visualise varied edge radii
+# tree.add_scalar_quantity("radius node",joint_radii,defined_on='nodes',enabled=True) # this is sufficient to visualise varied edge radii
+# tree.set_node_radius_quantity("radius node") # this is sufficient to visualise varied edge radii
 # tree.add_scalar_quantity("radius",radius,defined_on='edges',enabled=False) # uncomment this if you want to visualise nodes too
 # tree.set_edge_radius_quantity("radius") # uncomment this if you want to visualise nodes too
 
