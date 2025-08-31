@@ -491,19 +491,6 @@ existing = False
 # perspective projection magnifies the change in depth variation as camera rotates, causing 2D slice rotation look 'laggy' as camera position becomes less orthogonal to the slice (facing the slice more diagonally than directly)
 # very interesting. Compare it w/ the default 'perspective' projection to see the difference in animation smoothness as camera rotates around the structures.
 
-# # when in orthographic projection, fix intrinsic parameters (esp. field of view) to avoid zooming in/out during animation
-# # Suppose your image volume has shape (nx, ny, nz) in world units
-# nx, ny, nz = shape
-# aspect = nx / ny   # or use viewport aspect ratio
-
-# # Set orthographic "vertical span" big enough for your whole volume
-# ortho_span = max(nx, ny, nz) * 1.1   # add margin
-
-# intrinsics = ps.CameraIntrinsics(fov_vertical_deg=ortho_span, aspect=aspect) # fix the intrinsic params to avoid auto updating FOV during animation (which may results in zooming in/out during anime)
-# extrinsics = ps.CameraExtrinsics(root=(centre[0],centre[0]-2*spin_radius,centre[2]), look_dir=(0., -1., 0.), up_dir=(0.,1.,0.)) # initial cam position. For revolving camera later, update cam extrinsic params.
-# params = ps.CameraParameters(intrinsics, extrinsics)
-# ps.set_view_camera_parameters(params)
-
 def callback():
     global spin_f, n_spin, spin_radius, centre, spin
     # vars for Extraction
