@@ -347,6 +347,84 @@ def split_frames(nodes, edges, radii, num_frames=60, alpha=5.0):
 
     return frames
 
+def extract_path(nodes, edges, start=0, end=None):
+    """
+    Extracts a path along a tree between start and end nodes.
+    If end is None, it will return a path from start to any leaf.
+    
+    nodes: (N,3) array of coordinates
+    edges: list of (u,v) tuples (integer node indices)
+    """
+    from collections import defaultdict
+    
+    # adjacency list
+    graph = defaultdict(list)
+    for u, v in edges:
+        graph[u].append(v)
+        graph[v].append(u)
+    
+    visited = set()
+    path = []
+
+    def dfs(node):
+        visited.add(node)
+        path.append(node)
+        
+        # If end node is found, stop
+        if end is not None and node == end:
+            return True
+        
+        for neigh in graph[node]:
+            if neigh not in visited:
+                if dfs(neigh):
+                    return True
+        
+        # backtrack if not valid
+        if end is not None:
+            path.pop()
+        return False
+    
+    dfs(start)
+
+    return [nodes[i] for i in path]
+
+def downsample_path(points, step=3):
+    return points[::step]
+
+# def smooth_path(points, n_frames=200, smooth=0.5):
+#     """
+#     Fit a spline through the path for smooth camera motion.
+#     smooth=0 means interpolate exactly, higher values = smoother.
+#     """
+#     from scipy.interpolate import splprep, splev
+#     points = np.array(points).T  # shape (3, N)
+#     tck, u = splprep(points, s=smooth)
+#     u_new = np.linspace(0, 1, n_frames)
+#     x_new, y_new, z_new = splev(u_new, tck)
+#     return np.stack([x_new, y_new, z_new], axis=1)
+
+def simplify_path(points, tolerance=0.1):
+    from shapely.geometry import LineString
+    """
+    Simplify path using Douglas-Peucker algorithm.
+    tolerance controls how much detail is preserved.
+    """
+    line = LineString(points)
+    simplified = line.simplify(tolerance)
+    return np.array(simplified.coords)
+
+def path_tangents(path):
+    """
+    Use the path tangent to set camera's pointing direction.
+    """
+    path = np.array(path)
+    tangents = np.zeros_like(path)
+    tangents[1:-1] = path[2:] - path[:-2]  # central difference
+    tangents[0] = path[1] - path[0]
+    tangents[-1] = path[-1] - path[-2]
+    # normalize
+    tangents /= np.linalg.norm(tangents, axis=1)[:, None]
+    return tangents
 
 ps.set_print_prefix("ABI Lungs & Respiratory Group 2025\n")
 ps.init()
@@ -427,37 +505,35 @@ frames[0] = {'nodes':np.array(nodes[:15]),'edges':np.array(edges[:14]),'radius':
 units_dict = read_exnodedata('ps_demo_data/terminal.exnode')
 
 # === SCENE 3: lung ventilating
-node_numbers, vals_by_frame = read_terminaldvdt_bin('ps_demo_data/terminaldvdt.bin') # Read terminaldvdt.bin
-n_frames_vent = len(vals_by_frame)
+node_numbers, vols_by_frame = read_terminaldvdt_bin('ps_demo_data/terminaldvdt.bin') # Read terminaldvdt.bin
+n_vent = len(vols_by_frame)
 
 # Sort coordinates by Node numbers
 combined = list(zip(units_dict[('Node number', None)], units_dict[('coordinates', 3)])) # Zip node numbers with coordinates
 combined_sorted = sorted(combined, key=lambda x: x[0]) # Sort both by node number
 _, sorted_coords = zip(*combined_sorted) # Unzip the sorted pairs back into separate lists
 
-vols_all_frames = [arr**2+500 for arr in vals_by_frame] # to visibly see unit expansion in animation, scale up values (arbitrary scaling)
+vols_all_frames = [arr**2+500 for arr in vols_by_frame] # to visibly see unit expansion in animation, scale up values (arbitrary scaling)
 
 # Get min, max values to clamp colormap range. If no clamp, colour no change in animation.
 vmin = math.floor(np.min(vols_all_frames))
 vmax = math.ceil(np.max(vols_all_frames))
 
+# # === SCENE 4: Path tracing ===
+# path_nodes = extract_path(nodes,edges,start=0,end=63581) # end at left lung lingula
+# path_nodes = downsample_path(path_nodes,step=1000)
+# path_nodes = simplify_path(path_nodes, tolerance=0.1)
+# tangents = path_tangents(path_nodes)
 
-# === END SCENE: 2D image of logo & credits ===
-# create end plane
-
-# Register 2D image. Position in front of model
-w = 1024
-h = 768
-ps.add_scalar_image_quantity("scalar_img", np.zeros((h, w)), enabled=False, 
-                             datatype='symmetric', vminmax=(-3.,.3), cmap='reds')
-
-# set plane to affect 2D image only
-
+# === END SCENE: ABI logo and credits
+from PIL import Image
+img = Image.open('ps_demo_data/ABI_logo.png').convert("RGB")  # force 3 channels
+img = np.array(img)
 
 # --- CLEAR MEMORY: delete variables not needed after callback ---
-del img, arr_img, bound_high, bound_low
+del arr_img, bound_high, bound_low
 del nodes, edges, radius, lobe_sub_edges, lobe_sub_nodes, lobe_sub_rad, parent, parents, lobe, lobe_frames, f_nodes, f_edges, f_radius, node_offset
-del units_dict, combined, combined_sorted, node_numbers, vals_by_frame
+del units_dict, combined, combined_sorted, node_numbers
 # del w, h
 import gc
 gc.collect()
@@ -475,7 +551,7 @@ gc.collect()
 spin_f = 0 # spin curr frame
 n_spin = 500 # spin total frames
 spin_radius = shape[1]*spacing[1]
-ps.look_at((centre[0],centre[0]-2*spin_radius,centre[2]),centre) # not sure y it doesn't automatically centre cam now. add this to centre cam
+ps.look_at((centre[0],centre[0]-spin_radius,centre[2]),centre) # not sure y it doesn't automatically centre cam now. add this to centre cam
 spin = False
 ext_f = 0 # extraction curr frame
 n_extract = 250 # extraction total frames
@@ -485,7 +561,15 @@ grow_f = 0
 n_grow = n_frames_grow + 10
 transparency = np.linspace(0.5,0,n_frames_grow)
 grow = False
+vent_f = 0
 vent = False
+# n_path = len(path_nodes) + 10
+# path_f = 0
+# path = False
+end = False
+end_f = 0
+n_end = 30
+transparency_end = np.linspace(0.0,1.0,n_end)
 existing = False
 # ps.set_view_projection_mode('orthographic') # switch from default 'perspective' projection to orthographic projection
 # perspective projection magnifies the change in depth variation as camera rotates, causing 2D slice rotation look 'laggy' as camera position becomes less orthogonal to the slice (facing the slice more diagonally than directly)
@@ -498,14 +582,20 @@ def callback():
     global meshes_ps, upper_airway
     # vars for growing
     global grow, grow_f, n_grow, n_frames_grow, frames, tree, transparency
-    global sorted_coords, vols_all_frames, vmin, vmax, pts
     # vars for ventilation
-    global vent, n_frames_vent
+    global sorted_coords, vols_all_frames, vmin, vmax, pts
+    global vent, n_vent, update_vent, vent_f, vols_by_frame
+    # vars for path tracing
+    # global path_f, path_f, path_nodes, tangents, n_path, path, update_path
+    # vars for end scene
+    global end_f, n_end, end, transparency_end, update_end, img
     global existing
 
     update_spin = False
     update_extract = False
     update_grow = False
+    update_vent = False
+    update_end = False
 
     _, spin = psim.Checkbox("Spin", spin)
     if spin: # Advance the frame
@@ -524,7 +614,6 @@ def callback():
         z = centre[2] # for turntable revolution, set camera's z to a fixed height
         camera_pos = (x, y, z)
         # set camera to look at the object
-        # ps.look_at_dir(camera_pos, centre, (0,0,1), fly_to=False)
         ps.look_at(camera_pos, centre, fly_to=False)
 
     changed_ext, extract = psim.Checkbox("Extraction", extract)
@@ -609,9 +698,9 @@ def callback():
             update_grow = False
             for m in meshes_ps:
                 m.set_enabled(False)
-            pts = ps.register_point_cloud("units", np.array(sorted_coords),enabled=True) # Register terminal units
-            pts.add_scalar_quantity("volume", vols_all_frames[0],vminmax=(vmin,vmax),enabled=True) # varies node colours. Initialise w/ first timestep values.
-            pts.set_point_radius_quantity("volume") # varies node size
+            pts = ps.register_point_cloud("tissue units", np.array(sorted_coords),color=(0.2,0.6,0.6),enabled=True) # Register terminal units
+            # pts.add_scalar_quantity("volume", vols_all_frames[0],vminmax=(vmin,vmax),enabled=True) # varies node colours. Initialise w/ first timestep values.
+            # pts.set_point_radius_quantity("volume") # varies node size
 
         if grow_f==0:
             ps.remove_all_structures() # clear memory
@@ -625,31 +714,92 @@ def callback():
         for m in meshes_ps: # meshes fading away
             m.set_transparency(transparency[grow_f])
 
-    # _, vent = psim.Checkbox("Ventilation",vent)
-    # while vent: # SCENE 3 button
-    #     for curr_frame in range(n_frames_vent):
-    #         pts.add_scalar_quantity("volume", vols_all_frames[curr_frame],vminmax=(vmin,vmax),enabled=True)
+    changed_vent, vent = psim.Checkbox("Ventilation",vent)
+    if changed_vent:
+        if not vent and existing:
+            ps.remove_all_structures()
+            existing = False
+            update_vent = False
+    if vent: # SCENE 3 button
+        update_vent = True
+        vent_f = (vent_f+1) % n_vent
+        time.sleep(0.05)
+        if not existing:
+            existing=True
+            pts = ps.register_point_cloud("tissue units",np.array(sorted_coords),enabled=True) # Visualise tissue units
+            pts.add_scalar_quantity("volume",vols_all_frames[0],vminmax=(vmin,vmax),enabled=True)
+            pts.set_point_radius_quantity("volume")
+
+            upper_airway = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8])
+            upper_airway.add_scalar_quantity("radius", frames[0]['radius'], defined_on='nodes', enabled=False)
+            upper_airway.set_node_radius_quantity("radius")
+            tree = ps.register_curve_network("airways",frames[-1]['nodes'],frames[-1]['edges'],color=[1.0,0.8,0.8]) # Plant full tree
+            tree.add_scalar_quantity("radius", frames[-1]['radius'], defined_on='nodes', enabled=False)
+            tree.set_node_radius_quantity("radius")
+
+            # Add tidal vol label
+            psim.TreeNode("Lung volume")
+            psim.TextUnformatted(f"Lung volume: {np.sum(vols_by_frame[vent_f])/10**6:.2f} L")
+    if update_vent:
+        pts.add_scalar_quantity("volume", vols_all_frames[vent_f],vminmax=(vmin,vmax),enabled=True)
+        pts.set_point_radius_quantity("volume")
+        psim.TextUnformatted(f"Lung volume: {np.sum(vols_by_frame[vent_f])/10**6:.2f} L")
+
+    changed_end, end = psim.Checkbox("End Scene", end) # END SCENE button
+    if changed_end:
+        if not end and existing:
+            ps.remove_all_structures()
+            existing = False
+            update_end=False
+    if end:
+        update_end = True
+        end_f = (end_f+1) % n_end
+        time.sleep(0.05)
+        if not existing:
+            existing = True # Start timer
+            pts = ps.register_point_cloud("tissue units",np.array(sorted_coords),enabled=True) # Visualise tissue units
+            pts.add_scalar_quantity("volume",vols_all_frames[0],vminmax=(vmin,vmax),enabled=True)
+            pts.set_point_radius_quantity("volume")
+            pts.add_color_image_quantity("color_img", img, enabled=True, 
+                            show_fullscreen=True, show_in_imgui_window=False, transparency=transparency_end[0])
+    if update_end:
+        pts.add_color_image_quantity("color_img", img, enabled=True, 
+                            show_fullscreen=True, show_in_imgui_window=False, transparency=transparency[end_f]) # not transitioning
+                                        
+    # changed_path, path = psim.Checkbox("Bronchoscopy", path) # SCENE 4 button
+    # if changed_path:
+    #     if not path and existing:
+    #         ps.look_at((centre[0],centre[0]-2*spin_radius,centre[2]),centre) # recentre cam
+    #         existing = False
+    #         update_path = False
+    # if path:
+    #     update_path = True
+    #     path_f = (path_f+1) % n_path
+    #     time.sleep(0.05)
+    #     if not existing:
+    #         existing = True
+    #         pts = ps.register_point_cloud("tissue units",np.array(sorted_coords),enabled=True) # Visualise tissue units
+    #         pts.add_scalar_quantity("volume",vols_all_frames[0],vminmax=(vmin,vmax),enabled=True)
     #         pts.set_point_radius_quantity("volume")
-    #         time.sleep(0.05)
 
-    # if(psim.Button("SCENE 4")): # SCENE 4 button
-    #     spin = False # turn off cam spin if on
-    #     # cam fly to start pt of airway path
-    #     for t in range(n_frames_path): # move from node to node?
-    #         x = 
-    #         y = 
-    #         z = 
-    #         camera_pos = (x, y, z)
-    #         ps.look_at_dir(camera_pos, target, up_dir, fly_to=False) # set camera to look at the object
-
-    # if(psim.Button("END SCENE")): # END SCENE button
-        # spin = False
-        # ps.set_camera_view_matrix(reset_cam) # reset to coronal front view
-
-        # plane_end.set_enabled(True)
-        # for t in np.linspace(0., 2*np.pi, 120): # Animate the plane sliding along the scene
-        #     pos = np.cos(t) * .8 + .2
-        #     plane_end.set_pose((0., 0., pos), (0., 0., -1.))
+    #         upper_airway = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8])
+    #         upper_airway.add_scalar_quantity("radius", frames[0]['radius'], defined_on='nodes', enabled=False)
+    #         upper_airway.set_node_radius_quantity("radius")
+    #         tree = ps.register_curve_network("airways",frames[-1]['nodes'],frames[-1]['edges'],color=[1.0,0.8,0.8]) # Plant full tree
+    #         tree.add_scalar_quantity("radius", frames[-1]['radius'], defined_on='nodes', enabled=False)
+    #         tree.set_node_radius_quantity("radius")
+            
+    #         # ps.look_at_dir(path_nodes[0], target=path_nodes[0]+tangents[0], up_dir=(0,1,0), fly_to=True) # cam fly to start pt of airway path
+    #         ps.look_at(path_nodes[0], target=path_nodes[0]+tangents[0], fly_to=True) # cam fly to start pt of airway path
+    #     if path_f>=len(path_nodes):
+    #         ps.look_at((centre[0],centre[0]-2*spin_radius,centre[2]),centre,fly_to=True) # zoom out recentre cam
+    #         update_path=False
+    #     if path_f==0: # at the end, destroy all structures
+    #         # ps.remove_all_structures() # free memory
+    #         # existing = False
+    #         update_path=False
+    # if update_path:
+    #     ps.look_at_dir(camera_location=path_nodes[path_f], target=path_nodes[path_f]+tangents[path_f], up_dir=(0,1,0), fly_to=True)
 
     # if(psim.Button("FULL MOVIE")): # FULL MOVIE button
     #     # play scenes chronologically
