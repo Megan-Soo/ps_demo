@@ -391,18 +391,6 @@ def extract_path(nodes, edges, start=0, end=None):
 def downsample_path(points, step=3):
     return points[::step]
 
-# def smooth_path(points, n_frames=200, smooth=0.5):
-#     """
-#     Fit a spline through the path for smooth camera motion.
-#     smooth=0 means interpolate exactly, higher values = smoother.
-#     """
-#     from scipy.interpolate import splprep, splev
-#     points = np.array(points).T  # shape (3, N)
-#     tck, u = splprep(points, s=smooth)
-#     u_new = np.linspace(0, 1, n_frames)
-#     x_new, y_new, z_new = splev(u_new, tck)
-#     return np.stack([x_new, y_new, z_new], axis=1)
-
 def simplify_path(points, tolerance=0.1):
     from shapely.geometry import LineString
     """
@@ -430,8 +418,6 @@ ps.set_print_prefix("ABI Lungs & Respiratory Group 2025\n")
 ps.init()
 ps.set_up_dir("z_up")
 ps.set_front_dir("neg_y_front")
-# ps.set_navigation_style("free")
-# reset_cam = ps.get_camera_view_matrix()
 
 # === SCENE 1: extracting upper airway + lobe geometries from 3D image ===
 # Register 3D image volume
@@ -458,6 +444,7 @@ edges = extract_global_numbers('../lobed_MRI_model/results/001_smooth_once/grown
 radius = extract_radius('../lobed_MRI_model/results/001_smooth_once/grown_radius.ipfiel')
 edges = edges-1
 radius, _ = compute_joint_radii(nodes, edges, radius)
+radius = radius * 2 # scale tree branch size
 
 # === SCENE 2: tree growing into lobes ===
 # Break down tree into lobes
@@ -513,11 +500,9 @@ combined = list(zip(units_dict[('Node number', None)], units_dict[('coordinates'
 combined_sorted = sorted(combined, key=lambda x: x[0]) # Sort both by node number
 _, sorted_coords = zip(*combined_sorted) # Unzip the sorted pairs back into separate lists
 
-vols_all_frames = [arr**2+500 for arr in vols_by_frame] # to visibly see unit expansion in animation, scale up values (arbitrary scaling)
-
 # Get min, max values to clamp colormap range. If no clamp, colour no change in animation.
-vmin = math.floor(np.min(vols_all_frames))
-vmax = math.ceil(np.max(vols_all_frames))
+vmin = math.floor(np.min(vols_by_frame))
+vmax = math.ceil(np.max(vols_by_frame))
 
 # # === SCENE 4: Path tracing ===
 # path_nodes = extract_path(nodes,edges,start=0,end=63581) # end at left lung lingula
@@ -585,7 +570,7 @@ def callback():
     # vars for growing
     global grow, grow_f, n_grow, n_frames_grow, frames, tree, transparency
     # vars for ventilation
-    global sorted_coords, vols_all_frames, vmin, vmax, pts
+    global sorted_coords, vmin, vmax, pts
     global vent, n_vent, update_vent, vent_f, vols_by_frame
     # vars for path tracing
     # global path_f, path_f, path_nodes, tangents, n_path, path, update_path
@@ -649,7 +634,7 @@ def callback():
                 surf = ps.register_surface_mesh(f'{lobe}',vertices,faces,smooth_shade=True, transparency=0.5)
                 meshes_ps.append(surf) # store to set ignore planes later
 
-            upper_airway = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8]) # register upper airway
+            upper_airway = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8],radius=0.01) # register upper airway
             upper_airway.add_scalar_quantity("radius", frames[0]['radius'], defined_on='nodes')
             upper_airway.set_node_radius_quantity("radius")
 
@@ -717,7 +702,7 @@ def callback():
                 surf = ps.register_surface_mesh(f'{lobe}',vertices,faces,smooth_shade=True, transparency=transparency[0],enabled=True)
                 meshes_ps.append(surf) # store to set ignore planes later
             
-            tree = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8]) # register upper airway
+            tree = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8],radius=0.01) # register upper airway
             tree.add_scalar_quantity("radius", frames[0]['radius'], defined_on='nodes')
             tree.set_node_radius_quantity("radius") # nodes become visible in 'orthographic' projection
         
@@ -725,7 +710,7 @@ def callback():
             update_grow = False
             for m in meshes_ps:
                 m.set_enabled(False)
-            pts = ps.register_point_cloud("tissue units", np.array(sorted_coords),color=(0.2,0.6,0.6),enabled=True) # Register terminal units
+            pts = ps.register_point_cloud("tissue units", np.array(sorted_coords),color=(0.2,0.4,0.4),enabled=True,radius=0.01) # Register terminal units
             # pts.add_scalar_quantity("volume", vols_all_frames[0],vminmax=(vmin,vmax),enabled=True) # varies node colours. Initialise w/ first timestep values.
             # pts.set_point_radius_quantity("volume") # varies node size
 
@@ -734,7 +719,7 @@ def callback():
             existing = False
             update_grow=False
     if update_grow: # Grow tree
-        tree = ps.register_curve_network("airways",frames[grow_f]['nodes'],frames[grow_f]['edges'],color=[1.0,0.8,0.8])
+        tree = ps.register_curve_network("airways",frames[grow_f]['nodes'],frames[grow_f]['edges'],color=[1.0,0.8,0.8],radius=0.01)
         tree.add_scalar_quantity("radius", frames[grow_f]['radius'], defined_on='nodes', enabled=False)
         tree.set_node_radius_quantity("radius")
 
@@ -753,14 +738,14 @@ def callback():
         time.sleep(0.05)
         if not existing:
             existing=True
-            pts = ps.register_point_cloud("tissue units",np.array(sorted_coords),enabled=True) # Visualise tissue units
-            pts.add_scalar_quantity("volume",vols_all_frames[0],vminmax=(vmin,vmax),enabled=True)
+            pts = ps.register_point_cloud("tissue units",np.array(sorted_coords),enabled=True,radius=0.01) # Visualise tissue units
+            pts.add_scalar_quantity("volume",vols_by_frame[0],vminmax=(vmin,vmax),enabled=True,cmap='jet')
             pts.set_point_radius_quantity("volume")
 
-            upper_airway = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8])
+            upper_airway = ps.register_curve_network("upper airway",frames[0]['nodes'],frames[0]['edges'],color=[1.0,0.8,0.8],radius=0.01)
             upper_airway.add_scalar_quantity("radius", frames[0]['radius'], defined_on='nodes', enabled=False)
             upper_airway.set_node_radius_quantity("radius")
-            tree = ps.register_curve_network("airways",frames[-1]['nodes'],frames[-1]['edges'],color=[1.0,0.8,0.8]) # Plant full tree
+            tree = ps.register_curve_network("airways",frames[-1]['nodes'],frames[-1]['edges'],color=[1.0,0.8,0.8],radius=0.01) # Plant full tree
             tree.add_scalar_quantity("radius", frames[-1]['radius'], defined_on='nodes', enabled=False)
             tree.set_node_radius_quantity("radius")
 
@@ -768,7 +753,7 @@ def callback():
             psim.TreeNode("Lung volume")
             psim.TextUnformatted(f"Lung volume: {np.sum(vols_by_frame[vent_f])/10**6:.2f} L")
     if update_vent:
-        pts.add_scalar_quantity("volume", vols_all_frames[vent_f],vminmax=(vmin,vmax),enabled=True)
+        pts.add_scalar_quantity("volume", vols_by_frame[vent_f],vminmax=(vmin,vmax),enabled=True,cmap='jet')
         pts.set_point_radius_quantity("volume")
         psim.TextUnformatted(f"Lung volume: {np.sum(vols_by_frame[vent_f])/10**6:.2f} L")
 
@@ -785,7 +770,7 @@ def callback():
         if not existing:
             existing = True # Start timer
             pts = ps.register_point_cloud("tissue units",np.array(sorted_coords),enabled=True) # Visualise tissue units
-            pts.add_scalar_quantity("volume",vols_all_frames[0],vminmax=(vmin,vmax),enabled=True)
+            pts.add_scalar_quantity("volume",vols_all_frames[0],vminmax=(vmin,vmax),enabled=True,cmap='jet')
             pts.set_point_radius_quantity("volume")
             pts.add_color_image_quantity("color_img", img, enabled=True, 
                             show_fullscreen=True, show_in_imgui_window=False, transparency=transparency_end[0])
