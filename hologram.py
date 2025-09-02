@@ -551,11 +551,13 @@ gc.collect()
 spin_f = 0 # spin curr frame
 n_spin = 500 # spin total frames
 spin_radius = shape[1]*spacing[1]
+elevation = centre[2]
 ps.look_at((centre[0],centre[0]-spin_radius,centre[2]),centre) # not sure y it doesn't automatically centre cam now. add this to centre cam
 spin = False
 ext_f = 0 # extraction curr frame
 n_extract = 250 # extraction total frames
 slice_t = np.linspace(-1, shape[1]*spacing[1], n_extract) # create slice plane positions
+slice_t2 = np.linspace(0, -shape[0]*spacing[0], n_extract) # create slice plane positions
 extract = False
 grow_f = 0
 n_grow = n_frames_grow + 10
@@ -576,10 +578,10 @@ existing = False
 # very interesting. Compare it w/ the default 'perspective' projection to see the difference in animation smoothness as camera rotates around the structures.
 
 def callback():
-    global spin_f, n_spin, spin_radius, centre, spin
+    global spin_f, n_spin, spin_radius, centre, spin, elevation
     # vars for Extraction
-    global ext_f, n_extract, slice_t, extract, lobes, meshes, swap_arr, shape, spacing
-    global meshes_ps, upper_airway
+    global ext_f, n_extract, slice_t, slice_t2, extract, lobes, meshes, swap_arr, shape, spacing
+    global meshes_ps, upper_airway, img_block,img_block2
     # vars for growing
     global grow, grow_f, n_grow, n_frames_grow, frames, tree, transparency
     # vars for ventilation
@@ -606,12 +608,16 @@ def callback():
         update_spin = True
         spin_f = (spin_f + 1) % n_spin
         # time.sleep(0.05) # add latency to slow down animation (optional)
+
+    slider_updated, elevation = psim.SliderFloat("Elevation", elevation, centre[2]-spin_radius, centre[2]+spin_radius)
+    update_spin = update_spin or slider_updated
+
     if update_spin:
         angle = 2 * np.pi * spin_f / n_spin  # full revolution
         # spherical to cartesian camera position        
         x = centre[0] + spin_radius * np.cos(angle)
         y = centre[1] + spin_radius * np.sin(angle)
-        z = centre[2] # for turntable revolution, set camera's z to a fixed height
+        z = elevation # for turntable revolution, set camera's z to a fixed height
         camera_pos = (x, y, z)
         # set camera to look at the object
         ps.look_at(camera_pos, centre, fly_to=False)
@@ -621,6 +627,8 @@ def callback():
         if not extract and existing:
             ps.remove_last_scene_slice_plane() # hmm, remove_all_structures doesn't include slice planes
             ps.remove_last_scene_slice_plane()
+            ps.remove_last_scene_slice_plane()
+            ps.remove_last_scene_slice_plane()
             ps.remove_all_structures()
             existing = False
             update_extract = False
@@ -628,6 +636,7 @@ def callback():
         update_extract = True
         ext_f = (ext_f + 1) % n_extract
         pos = slice_t[ext_f]
+        pos2 = slice_t2[ext_f]
 
         if not existing: # at the beginning, register all structures
             existing = True
@@ -648,11 +657,17 @@ def callback():
                 bound_high=(shape[2]*spacing[0],shape[1]*spacing[1],-shape[0]*spacing[2]),enabled=True)
             img_block.add_scalar_quantity("intensity",swap_arr,defined_on='nodes',enabled=True,cmap='gray')
 
+            img_block2 = ps.register_volume_grid("image2", (shape[2],shape[1],shape[0]),bound_low=(0,0,0), # maybe better to register slice by slice?
+                bound_high=(shape[2]*spacing[0],shape[1]*spacing[1],-shape[0]*spacing[2]),enabled=True)
+            img_block2.add_scalar_quantity("intensity",swap_arr,defined_on='nodes',enabled=True,cmap='gray')
+
         if ext_f==0: # at the end, destroy all structures
             ps.remove_all_structures() # free memory
             existing = False
             update_extract=False
     if update_extract: # Animate the plane sliding along the scene
+        ps.remove_last_scene_slice_plane() # Remove prev slice plane
+        ps.remove_last_scene_slice_plane() # Remove prev slice plane
         ps.remove_last_scene_slice_plane() # Remove prev slice plane
         ps.remove_last_scene_slice_plane() # Remove prev slice plane
 
@@ -662,10 +677,22 @@ def callback():
         cor_plane_pos = ps.add_scene_slice_plane()
         cor_plane_pos.set_pose((0., pos, 0.), (0., 1., 0.))
 
+        ax_plane_neg = ps.add_scene_slice_plane()
+        ax_plane_neg.set_pose((0., 0., pos2+10), (0., 0., -1.))
+        ax_plane_pos = ps.add_scene_slice_plane()
+        ax_plane_pos.set_pose((0., 0., pos2), (0., 0., 1.))
+
+        img_block.set_ignore_slice_plane(ax_plane_neg,True)
+        img_block.set_ignore_slice_plane(ax_plane_pos,True)
+        img_block2.set_ignore_slice_plane(cor_plane_neg,True)
+        img_block2.set_ignore_slice_plane(cor_plane_pos,True)
+
         for m in meshes_ps: # Set ignore meshes
             m.set_ignore_slice_plane(cor_plane_pos,True)
+            m.set_ignore_slice_plane(ax_plane_neg,True)
 
         upper_airway.set_ignore_slice_plane(cor_plane_pos,True)
+        upper_airway.set_ignore_slice_plane(ax_plane_neg,True)
 
     changed_grow, grow = psim.Checkbox("Growing", grow)
     if changed_grow:
