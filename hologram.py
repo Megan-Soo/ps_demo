@@ -512,8 +512,8 @@ vmax = math.ceil(np.max(vols_by_frame))
 
 # === END SCENE: ABI logo and credits
 from PIL import Image
-img = Image.open('ps_demo_data/ABI_logo.png').convert("RGB")  # force 3 channels
-img = np.array(img)
+img = Image.open('ps_demo_data/UoA_ABI_black.png')#.convert("RGB") # force 3 channels
+img = np.array(img,dtype=np.float32) / 255.0 # normalise values [0,1]
 
 # --- CLEAR MEMORY: delete variables not needed after callback ---
 del arr_img, bound_high, bound_low
@@ -555,8 +555,12 @@ vent = False
 # path = False
 end = False
 end_f = 0
+offset = 5
+n_fade = 15
 n_end = 30
-transparency_end = np.linspace(0.0,1.0,n_end)
+transparency_end = np.linspace(0.0,1.0,n_fade)
+alpha = 10
+transparency_end = (np.exp(alpha*transparency_end)/(np.exp(alpha)-1)) # slow at start, fast at end. larger k -> more sudden change
 existing = False
 # ps.set_view_projection_mode('orthographic') # switch from default 'perspective' projection to orthographic projection
 # perspective projection magnifies the change in depth variation as camera rotates, causing 2D slice rotation look 'laggy' as camera position becomes less orthogonal to the slice (facing the slice more diagonally than directly)
@@ -575,7 +579,7 @@ def callback():
     # vars for path tracing
     # global path_f, path_f, path_nodes, tangents, n_path, path, update_path
     # vars for end scene
-    global end_f, n_end, end, transparency_end, update_end, img
+    global end_f, n_end, end, transparency_end, update_end, img, n_fade, offset
     global existing
 
     update_spin = False
@@ -759,6 +763,12 @@ def callback():
 
     changed_end, end = psim.Checkbox("End Scene", end) # END SCENE button
     if changed_end:
+        if end:
+            intrinsics = ps.CameraIntrinsics(fov_vertical_deg=60.,aspect=1024/768)
+            extrinsics = ps.CameraExtrinsics((centre[0],centre[0]-spin_radius,centre[2]),look_dir=(0,1,0),up_dir=(0,0,1))
+            params = ps.CameraParameters(intrinsics,extrinsics)
+            ps.set_view_camera_parameters(params)
+
         if not end and existing:
             ps.remove_all_structures()
             existing = False
@@ -770,13 +780,23 @@ def callback():
         if not existing:
             existing = True # Start timer
             pts = ps.register_point_cloud("tissue units",np.array(sorted_coords),enabled=True) # Visualise tissue units
-            pts.add_scalar_quantity("volume",vols_all_frames[0],vminmax=(vmin,vmax),enabled=True,cmap='jet')
+            pts.add_scalar_quantity("volume",vols_by_frame[0],vminmax=(vmin,vmax),enabled=True,cmap='jet')
             pts.set_point_radius_quantity("volume")
-            pts.add_color_image_quantity("color_img", img, enabled=True, 
-                            show_fullscreen=True, show_in_imgui_window=False, transparency=transparency_end[0])
+                
+        if end_f<offset:
+            update_end=False
+
+        if end_f == offset:
+            update_end=True
+            pts.add_color_alpha_image_quantity("color_img", img, enabled=True, 
+                                    show_fullscreen=True, show_in_imgui_window=False, transparency=transparency_end[end_f-offset])
+
+        if end_f>=n_fade+offset:
+            update_end=False
+
     if update_end:
-        pts.add_color_image_quantity("color_img", img, enabled=True, 
-                            show_fullscreen=True, show_in_imgui_window=False, transparency=transparency[end_f]) # not transitioning
+        pts.add_color_alpha_image_quantity("color_img", img, enabled=True, 
+                            show_fullscreen=True, show_in_imgui_window=False, transparency=transparency_end[end_f-offset]) # not transitioning
                                         
     # changed_path, path = psim.Checkbox("Bronchoscopy", path) # SCENE 4 button
     # if changed_path:
