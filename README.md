@@ -11,3 +11,8 @@ Scripts to visualise/animate lung models using python package Polyscope.
 `pip install --upgrade pip`  
 `pip install -r requirements.txt  `
 
+To build polyscope-py from source:
+`git clone https://github.com/nmwsharp/polyscope-py.git`
+`cd polyscope-py`
+`git submodule update --init --recursive`
+`pip install .`

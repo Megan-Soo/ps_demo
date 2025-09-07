@@ -43,19 +43,10 @@ def callback():
     if update_frame_data:
         angle = 2 * np.pi * curr_frame / n_frames  # full revolution
         
-        # spherical to cartesian camera position
-
-        # # for all around revolution, don't fix up_dir (use ps.look_at instead of ps.look_at_dir)
-        # x = radius * np.cos(angle) * np.cos(elevation)
-        # y = radius * np.sin(angle) * np.cos(elevation)
-        # z = radius * np.sin(elevation)
-        # camera_pos = (x,y,z)
-        # ps.look_at(camera_pos,target,fly_to=False)
-        
-        # for turntable revolution
+        # spherical to cartesian camera position        
         x = radius * np.cos(angle)
         y = radius * np.sin(angle)
-        z = elevation # set camera's z to a fixed height
+        z = elevation # for turntable revolution, set camera's z to a fixed height
 
         camera_pos = (x, y, z)
     
