@@ -6,67 +6,6 @@ import pyvista as pv
 import pickle
 import time, math
 
-def split_frames(nodes, edges, radii, num_frames=60, alpha=5.0):
-    """
-    Given an array of nodes, radii, and connections (edges), split the connections 
-    into progressively smaller sections (nonlinear progression).
-    
-    Parameters
-    ----------
-    nodes : np.ndarray
-        Array of node coordinates, shape (N, d).
-    edges : array-like
-        List or array of edges, shape (M, 2).
-    radii : np.ndarray
-        Array of radius values per node, shape (N,).
-    num_frames : int
-        Number of frames to split into.
-    alpha : float
-        Progression exponent. 
-        <1 = more edges early, >1 = more edges late, =1 is linear.
-    
-    Returns
-    -------
-    frames : list of dict
-        Each dict contains:
-            'nodes' : np.ndarray, subset of nodes in the frame
-            'radii' : np.ndarray, radii corresponding to those nodes
-            'edges' : np.ndarray, remapped edges
-            'original_node_indices' : np.ndarray, indices of nodes in the original array
-    """
-    edges = np.array(edges)
-    num_edges = len(edges)
-
-    # Nonlinear progression of edges per frame
-    edges_per_frame = (np.linspace(0, 1, num_frames) ** alpha) * num_edges
-    edges_per_frame = np.ceil(edges_per_frame).astype(int)
-
-    frames = []
-
-    for i in range(num_frames):
-        num_edges_in_frame = edges_per_frame[i]
-        current_edges = edges[:num_edges_in_frame]
-
-        # Extract node indices used in current edges
-        used_node_indices = np.unique(current_edges)
-
-        # Get the subset of nodes and radii
-        current_nodes = nodes[used_node_indices]
-        current_radii = radii[used_node_indices]
-
-        # Map global indices to local indices (for drawing)
-        index_map = {old_idx: new_idx for new_idx, old_idx in enumerate(used_node_indices)}
-        remapped_edges = np.array([[index_map[a], index_map[b]] for a, b in current_edges])
-
-        frames.append({
-            'nodes': current_nodes,
-            'radius': current_radii,
-            'edges': remapped_edges,
-            'original_node_indices': used_node_indices
-        })
-
-    return frames
-
 ps.set_print_prefix("ABI Lungs & Respiratory Group 2025\n")
 ps.init()
 ps.set_up_dir("z_up")
