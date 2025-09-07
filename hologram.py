@@ -2,7 +2,6 @@
 import polyscope as ps
 import polyscope.imgui as psim
 import numpy as np
-import SimpleITK as sitk
 import pyvista as pv
 import pickle
 import time, math
@@ -75,9 +74,9 @@ ps.set_front_dir("neg_y_front")
 
 # === SCENE 1: extracting upper airway + lobe geometries from 3D image ===
 # Register 3D image volume
-img = sitk.ReadImage('hologram_data/raw_3D_RAS.mha')
-spacing = img.GetSpacing()
-arr_img = sitk.GetArrayFromImage(img) # in [Z,Y,X]
+data = np.load('hologram_data/raw_3D_RAS.npz')
+spacing = data['spacing']
+arr_img = data['array']
 shape = arr_img.shape # in (x,y,z)
 swap_arr = arr_img.transpose(2,1,0) # rearrange [Z,Y,X] to [X,Y,Z]
 
@@ -107,9 +106,6 @@ data = np.load('hologram_data/ventilation.npz')
 coordinates = data['acinus']
 vols_by_frame = data['dvdt']
 
-# Get min, max values to clamp colormap range. If no clamp, colour no change in animation.
-
-
 # === END SCENE: ABI logo and credits
 from PIL import Image
 img = Image.open('hologram_data/download.jpeg')#.convert("RGB") # force 3 channels
@@ -138,7 +134,6 @@ slice_t2 = np.linspace(0, -shape[0]*spacing[0], n_extract)
 pos = slice_t[0]
 pos2 = slice_t2[0]
 extract = False
-existing_plane = False
 
 # GROW variables
 tree=None
@@ -164,25 +159,25 @@ transparency_end = np.linspace(0.0,1.0,n_fade)
 alpha = 10
 transparency_end = (np.exp(alpha*transparency_end)/(np.exp(alpha)-1))
 
-# FULL MOVIE variables
-curr_frame = 0
-autoplay = False
-
+# Shared variables
 existing = False # SHARED variable
+existing_plane = False
 
 def callback():
+    # vars for Spin
     global spin_f, n_spin, spin_radius, centre, spin, elevation, axis, up_dir
     # vars for Extraction
     global ext_f, n_extract, slice_t, slice_t2, extract, lobes, meshes, swap_arr, shape, spacing
     global meshes_ps, upper_airway, img_block,img_block2
-    global cor_plane_pos,cor_plane_neg,ax_plane_neg,ax_plane_pos, pos, pos2, existing_plane
-    # vars for growing
+    global cor_plane_pos,cor_plane_neg,ax_plane_neg,ax_plane_pos, pos, pos2
+    # vars for Growing
     global grow, grow_f, n_grow, n_frames_grow, frames, tree, transparency, tree
-    # vars for ventilation
+    # vars for Ventilation
     global coordinates, pts, nodes,edges,radius
     global vent, n_vent, update_vent, vent_f, vols_by_frame, pts
-    # vars for end scene
+    # vars for End scene
     global end_f, n_end, end, transparency_end, update_end, img, n_fade, offset
+    # shared vars
     global existing, existing_plane
 
     update_spin = False
@@ -293,7 +288,6 @@ def callback():
             ps.set_navigation_style('turntable')
     if not extract:
         update_extract = False
-
     if extract: # SCENE 1 button
         ps.set_view_projection_mode('orthographic') # removes laggy initial transition
         update_extract = True
@@ -323,7 +317,6 @@ def callback():
             img_block2 = ps.register_volume_grid("image2", (shape[2],shape[1],shape[0]),bound_low=(0,0,0), # maybe better to register slice by slice?
                 bound_high=(shape[2]*spacing[0],shape[1]*spacing[1],-shape[0]*spacing[2]),enabled=True)
             img_block2.add_scalar_quantity("intensity",swap_arr,defined_on='nodes',enabled=True,cmap='gray')
-
     if update_extract: # Animate the plane sliding along the scene
         ps.remove_last_scene_slice_plane() # Remove prev slice plane
         ps.remove_last_scene_slice_plane() # Remove prev slice plane
@@ -410,7 +403,6 @@ def callback():
 
         for m in meshes_ps: # meshes fading away
             m.set_transparency(transparency[grow_f])
-
     if(psim.TreeNode("Manual")):
         slider_grow, grow_f = psim.SliderInt("Current Frame",grow_f,0,n_frames_grow-1)
         if slider_grow:
@@ -509,7 +501,6 @@ def callback():
 
         if end_f>=n_fade+offset:
             update_end=False
-
     if update_end:
         pts.add_color_image_quantity("color_img", img, enabled=True, 
                             show_fullscreen=True, show_in_imgui_window=False, transparency=transparency_end[end_f-offset]) # not transitioning
