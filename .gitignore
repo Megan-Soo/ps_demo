@@ -7,3 +7,5 @@ ps-venv
 **/__pycache__/
 *.pyc
 hologram_dev.py
+# But keep hologram_data files
+!hologram_data/*.ply
