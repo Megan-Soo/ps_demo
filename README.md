@@ -17,3 +17,6 @@ To build polyscope-py from source:
 `cd polyscope-py`  
 `git submodule update --init --recursive`  
 `pip install .`  
+
+### Run hologram.py
+'python hologram.py'
