@@ -10,13 +10,7 @@ Data is provided for hologram.py. Contact author to access data for other script
 `python -m venv venv-ps`  
 `source venv-ps/bin/activate`  
 `pip install --upgrade pip`  
-`pip install -r requirements.txt  `
-
-(Optional) To build polyscope-py from source:  
-`git clone https://github.com/nmwsharp/polyscope-py.git`  
-`cd polyscope-py`  
-`git submodule update --init --recursive`  
-`pip install .`  
+`pip install -r requirements.txt`
 
 ### Run hologram.py
 `python hologram.py`
