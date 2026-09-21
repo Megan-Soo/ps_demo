@@ -19,4 +19,4 @@ To build polyscope-py from source:
 `pip install .`  
 
 ### Run hologram.py
-'python hologram.py'
+`python hologram.py`
